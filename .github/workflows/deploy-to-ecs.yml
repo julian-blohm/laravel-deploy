@@ -33,11 +33,16 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-          
-      - name: Authenticate, Build and Push Docker image
-        run: |
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 211125561137.dkr.ecr.us-east-1.amazonaws.com
-          docker build -t laravel-app .
-          docker tag laravel-app:latest 211125561137.dkr.ecr.us-east-1.amazonaws.com/laravel-app:latest
-          docker push 211125561137.dkr.ecr.us-east-1.amazonaws.com/laravel-app:latest
+       
+      - name: Authenticate to Amazon ECR
+        run: aws ecr get-login-password --region ${{ vars.AWS_REGION }} | docker login --username AWS --password-stdin ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+      
+      - name: Build Docker image
+        run: docker build -t laravel-app .
+
+      - name: Tag Docker image
+        run: docker tag laravel-app:${{ github.sha }} ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/laravel-app:${{ github.sha }}
+
+      - name: Push Docker image
+        run: docker push ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/laravel-app:${{ github.sha }}
 
