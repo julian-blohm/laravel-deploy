@@ -5,4 +5,6 @@ RUN install-php-extensions \
 
 COPY . /app
 
+EXPOSE 8000
+
 ENTRYPOINT ["php", "artisan", "octane:frankenphp"]
