@@ -1,11 +1,15 @@
-name: Deploy to AWS ECS
+name: Build & Push to AWS ECR
 
 on:
   workflow_dispatch:
 
+env:
+  CONTAINER_NAME: laravel-container
+  AWS_REGION: eu-central-1
+
 jobs:
-  deploy-to-ecs:
-    name: Deploy to AWS ECS
+  build-and-push:
+    name: Build & Push to AWS ECR
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
@@ -14,9 +18,12 @@ jobs:
       - name: Create .env from DOTENV
         run: echo "${{ secrets.DOTENV }}" > .env
 
-
       - name: Install BE dependencies
-        run: composer install --optimize-autoloader --no-dev --no-scripts
+        run: |
+            composer install --optimize-autoloader --no-dev --no-scripts
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
 
       - name: Install npm dependencies
         run: npm ci
@@ -32,17 +39,17 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
        
       - name: Authenticate to Amazon ECR
         run: aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
       
       - name: Build Docker image
-        run: docker build -t sw .
+        run: docker build -t $CONTAINER_NAME .
 
       - name: Tag Docker image
-        run: docker tag sw ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/sw:latest
+        run: docker tag $CONTAINER_NAME ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$CONTAINER_NAME:latest
 
       - name: Push Docker image
-        run: docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/sw:latest
+        run: docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$CONTAINER_NAME:latest
 
