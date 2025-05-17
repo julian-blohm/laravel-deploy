@@ -1,0 +1,66 @@
+name: Build & Deploy Laravel (Docker, Lightsail)
+
+on:
+  workflow_dispatch:
+
+env:
+  SERVICE_NAME: laravel-service
+  CONTAINER_NAME: laravel-container
+  REGION: eu-central-1
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create .env from DOTENV
+        run: echo "${{ secrets.DOTENV }}" > .env
+
+
+      - name: Install BE dependencies
+        run: |
+          composer install --optimize-autoloader --no-dev --no-scripts
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
+          
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Generate optimized autoload files
+        run: composer dump-autoload --optimize
+
+      - name: Build FE
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.REGION }}
+
+      - name: Install Lightsail CLI
+        run: curl https://lightsail.aws.amazon.com/lsctl/install | bash
+      
+      - name: Build Docker image
+        run: docker build -t $CONTAINER_NAME .
+
+      - name: Tag Docker image
+        run: ddocker tag $CONTAINER_NAME:latest $CONTAINER_NAME
+
+      - name: Push Docker image
+        run: |
+          aws lightsailctl push-container-image \
+            --service-name $SERVICE_NAME \
+            --label $CONTAINER_NAME \
+            --image $CONTAINER_NAME:deploy
+
+
+      - name: Confirm container version
+        run: |
+          aws lightsail get-container-service-deployments --service-name $SERVICE_NAME
+
