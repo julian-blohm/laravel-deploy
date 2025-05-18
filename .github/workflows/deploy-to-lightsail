@@ -50,14 +50,14 @@ jobs:
         run: docker build -t $CONTAINER_NAME .
 
       - name: Tag Docker image
-        run: ddocker tag $CONTAINER_NAME:latest $CONTAINER_NAME
+        run: docker tag $CONTAINER_NAME:latest $CONTAINER_NAME
 
       - name: Push Docker image
         run: |
           aws lightsailctl push-container-image \
             --service-name $SERVICE_NAME \
             --label $CONTAINER_NAME \
-            --image $CONTAINER_NAME:deploy
+            --image $CONTAINER_NAME
 
 
       - name: Confirm container version
