@@ -69,15 +69,12 @@ jobs:
               "image": "${{ env.CONTAINER_NAME }}",
               "environment": {
                 "APP_ENV": "production",
-                "APP_DEBUG": "false"
-              },
-              "ports": {
-                "80": "HTTP"
+                "APP_KEY": "base64:4VGMEQshfikuFtyRQCax2XXg3JG7QeL+/8slPj6RuOE=",
+                "LOG_CHANNEL": "stderr"
               }
             }
           }
           EOF
-
 
       - name: Generate public-endpoint.json
         run: |
