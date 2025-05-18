@@ -67,6 +67,9 @@ jobs:
           {
             "${{ env.CONTAINER_NAME }}": {
               "image": "${{ env.CONTAINER_NAME }}",
+              "ports": {
+                "80": "HTTP"
+              },
               "environment": {
                 "APP_ENV": "production",
                 "APP_KEY": "base64:4VGMEQshfikuFtyRQCax2XXg3JG7QeL+/8slPj6RuOE=",
