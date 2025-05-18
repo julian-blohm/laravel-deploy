@@ -11,13 +11,13 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-24.04
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Create .env from DOTENV
         run: echo "${{ secrets.DOTENV }}" > .env
-
 
       - name: Install BE dependencies
         run: |
@@ -26,7 +26,6 @@ jobs:
           php artisan route:cache
           php artisan view:cache
           
-
       - name: Install npm dependencies
         run: npm ci
 
@@ -44,7 +43,9 @@ jobs:
           aws-region: ${{ env.REGION }}
 
       - name: Install Lightsail CLI
-        run: curl https://lightsail.aws.amazon.com/lsctl/install | bash
+        run: |
+          sudo curl "https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl" -o "/usr/local/bin/lightsailctl"
+          sudo chmod +x /usr/local/bin/lightsailctl
       
       - name: Build Docker image
         run: docker build -t $CONTAINER_NAME .
@@ -58,6 +59,46 @@ jobs:
             --service-name $SERVICE_NAME \
             --label $CONTAINER_NAME \
             --image $CONTAINER_NAME
+
+
+      - name: Generate containers.json
+        run: |
+          cat > containers.json <<EOF
+          {
+            "${{ env.CONTAINER_NAME }}": {
+              "image": "${{ env.CONTAINER_NAME }}",
+              "environment": {
+                "APP_ENV": "production",
+                "APP_DEBUG": "false"
+              },
+              "ports": {
+                "80": "HTTP"
+              }
+            }
+          }
+          EOF
+
+
+      - name: Generate public-endpoint.json
+        run: |
+          cat > public-endpoint.json <<EOF
+          {
+            "containerName": "${{ env.CONTAINER_NAME }}",
+            "containerPort": 80,
+            "healthCheck": {
+              "path": "/",
+              "successCodes": "200-499"
+            }
+          }
+          EOF
+
+
+      - name: Deploy container
+        run: |
+          aws lightsail create-container-service-deployment \
+            --service-name $SERVICE_NAME \
+            --containers "file://containers.json" \
+            --public-endpoint "file://public-endpoint.json"
 
 
       - name: Confirm container version
