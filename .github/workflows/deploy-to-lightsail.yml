@@ -55,7 +55,7 @@ jobs:
 
       - name: Push Docker image
         run: |
-          aws lightsailctl push-container-image \
+          aws lightsail push-container-image \
             --service-name $SERVICE_NAME \
             --label $CONTAINER_NAME \
             --image $CONTAINER_NAME
