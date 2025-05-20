@@ -52,28 +52,30 @@ jobs:
         run: docker build -t $CONTAINER_NAME .
 
       - name: Tag Docker image
-        run: docker tag $CONTAINER_NAME:latest $CONTAINER_NAME
+        run: docker tag $CONTAINER_NAME:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/$CONTAINER_NAME
+
+      - name: Authenticate to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
 
       - name: Push Docker image
-        run: |
-          aws lightsail push-container-image \
-            --service-name $SERVICE_NAME \
-            --label $CONTAINER_NAME \
-            --image $CONTAINER_NAME
+        run: docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/$CONTAINER_NAME
 
 
       - name: Generate containers.json
         run: |
           cat > containers.json <<EOF
           {
-            "${{ env.CONTAINER_NAME }}": {
-              "image": ":${{ env.SERVICE_NAME }}.${{ env.CONTAINER_NAME }}",
-              "ports": {
-                "80": "HTTP"
-              },
-              "environment": {
-                "APP_ENV": "production",
-                "LOG_CHANNEL": "stderr"
+            "containers": {
+              "${{ env.CONTAINER_NAME }}": {
+                "image": "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/$CONTAINER_NAME",
+                "ports": {
+                  "80": "HTTP"
+                },
+                "environment": {
+                  "APP_ENV": "production",
+                  "LOG_CHANNEL": "stderr"
+                }
               }
             }
           }
@@ -87,7 +89,6 @@ jobs:
             "containerPort": 80
           }
           EOF
-
 
       - name: Deploy container
         run: |
