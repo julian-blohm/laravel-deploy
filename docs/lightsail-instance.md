@@ -1,7 +1,9 @@
 # How to set up Laravel App on Lightsail instance (minimal setup)
 ## Prerequisites
 - Laravel App needs to be configured running on frankenphp
-- https://laravel.com/docs/12.x/octane
+    - https://laravel.com/docs/12.x/octane
+- Domain purchased/available
+- AWS lightsail account
 
 ## 1. Provision Lightsail Instance
 - https://docs.aws.amazon.com/lightsail/latest/userguide/getting-started-with-amazon-lightsail.html
@@ -14,9 +16,29 @@
 - instance name: don't use a random name like "tom"
 
 ## 2. Configure the instance 
+- lightsail console
+    - go to your networking tab in lightsail console
+    - attach a static ip to your instance and give it a name
 - ssh into instance `ssh -i <your-ssh-key.pem> ubuntu@<your-static-ip>`
 
-### 2.1 Setup prerequisites for the app
+### 2.1 Check existing 'port blocker' like apache
+```bash
+# Update & upgrade
+sudo apt update && sudo apt upgrade -y
+
+# Check apache2 status
+systemctl status apache2
+
+# Stop & disable apache
+sudo systemctl stop apache2
+sudo systemctl disable apache2
+
+# OPTIONAL but good "houskeeping" - remove apache
+sudo apt remove apache2 -y
+sudo apt autoremove -y
+```
+
+### 2.2 Setup prerequisites for the app
 - Execute following commands (or put them in a bash scrip an run it)
 
 ```bash
@@ -30,68 +52,48 @@ sudo add-apt-repository ppa:ondrej/php -y
 sudo apt update
 
 # Install PHP 8.3 and required extensions
-sudo apt install php8.3 php8.3-cli php8.3-mbstring php8.3-xml php8.3-curl \
-php8.3-mysql php8.3-sqlite3 php8.3-bcmath php8.3-zip unzip curl git -y
+sudo apt install \
+    php8.3 \
+    php8.3-cli \
+    php8.3-mysql \
+    php8.3-mbstring \
+    php8.3-xml \
+    php8.3-curl \
+    php8.3-bcmath \
+    -y
 
-# Install MySQL (for local database)
-sudo apt install mysql-server -y
-
+# Install tools that we also need
+sudo apt install \
+    unzip \
+    curl \
+    git \
+    supervisor \
+    -y 
+    
 # Install Composer
+cd ~
 curl -sS https://getcomposer.org/installer | php
-sudo mv composer.phar /usr/local/bin/composer
-
-#Install Frankenphp
-curl -fsSL https://github.com/dunglas/frankenphp/releases/latest/download/frankenphp-linux-x86_64 -o frankenphp
-chmod +x frankenphp
-sudo mv frankenphp /usr/local/bin/frankenphp
+sudo mv composer.phar /usr/local/bin/composer      
 ```
 
-OPTIONAL: Save this script as `setup.sh`, upload it to your instance, and run it using:
-
+## 3. MySQL / MariaDB Setup
 ```bash
-chmod +x setup.sh
-./setup.sh
-```
-### 2.2 Check existing 'port blocker' like apache
-```bash
-# Check apache2 status
-systemctl status apache2
+# Install and Setup MySQL/MariaDB (for local database)
+sudo apt install mariadb-server -y
+sudo systemctl enable mysql
+sudo systemctl start mysql
+sudo systemctl status mysql
 
-# Stop & disable apache
-sudo systemctl stop apache2
-sudo systemctl disable apache2
-
-# OPTIONAL but good "houskeeping" - remove apache
-sudo apt remove apache2 -y
-sudo apt autoremove -y
-```
-
-
-## 3. Initial Laravel Setup
-### 3.1 Setup Project
-```bash
-cd /var/www
-sudo git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git laravel
-cd laravel
-composer install --no-dev --optimize-autoloader
-cp .env.example .env
-php artisan key:generate
-```
-### 3.2 Set Laravel Permissions
-```bash
-sudo chown -R $USER:www-data .
-chmod -R 775 storage bootstrap/cache
-```
-### 3.3 MySQL Setup
-```bash
+#Secure MYSQL / MAriaDB
 sudo mysql_secure_installation
+### admin, n, n, n, Y, Y, Y
 
-# Log in
+# Log in (pw = admin)
 sudo mysql -u root -p
 
 # In MySQL:
 # Create DB
-CREATE DATABASE laravel_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE laravel_db;
 # Create User
 CREATE USER 'laravel_user'@'localhost' IDENTIFIED BY 'laravel_password';
 # Set Privileges
@@ -102,8 +104,37 @@ FLUSH PRIVILEGES;
 EXIT;
 ```
 
-### 3.4 Update Laravel .env
+## 4. Initial Laravel Setup
+### 4.1 Get Project
+```bash
+cd /var/www
+sudo git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git laravel
+cd laravel
+```
+
+### 4.2 Set Laravel Permissions
+```bash
+sudo chown -R $USER:www-data .
+sudo chmod -R 775 storage bootstrap/cache
+```
+
+### 4.3 Install PHP Dependencies
+```bash
+composer install --no-dev --optimize-autoloader
+```
+
+### 4.3 Set up Laravel .env
+```bash
+cp .env.example .env
+sudo vi .env
+```
+
+- set the following
 ```env
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://yourdomain.com
+
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
@@ -112,11 +143,44 @@ DB_USERNAME=laravel_user
 DB_PASSWORD=laravel_password
 ```
 
-### 3.5 Migrate Database
+- generate app key
+```bash
+php artisan key:generate
+```
+
+### 4.4 Migrate Database
 - ensure to execute from inside the laravel project (`/var/www/laravel`)
 ```bash
 php artisan migrate --force
 ```
+
+## 5. Install Caddy & Frankenphp
+### 5.1 Install caddy with frankenphp
+```bash
+curl -fsSL https://get.frankenphp.dev/caddy.sh | sh
+```
+
+
+
+
+
+###### STOP
+
+
+
+```
+#Install Frankenphp
+curl -fsSL https://github.com/dunglas/frankenphp/releases/latest/download/frankenphp-linux-x86_64 -o frankenphp
+chmod +x frankenphp
+sudo mv frankenphp /usr/local/bin/frankenphp
+```
+
+
+
+
+
+
+
 
 ## 4. Start Laravel with FrankenPHP
 - ensure that your setup has been successful so far
@@ -153,7 +217,6 @@ sudo apt install caddy -y
 ### 5.2 Update DNS Settings with Domain
 - lightsail console
     - go to your networking tab in lightsail console
-    - attach a static ip to your instance and give it a name
     - copy your static ip
 - your domain provider
     - go to dns settings
