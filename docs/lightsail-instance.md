@@ -154,19 +154,41 @@ php artisan key:generate
 php artisan migrate --force
 ```
 
-## 5. Install Caddy & Frankenphp
-### 5.1 Install caddy with frankenphp
+## 5. Setup FrankenPHP with built-in Caddy
+### 5.1 Try to start the app 
+- if you do not have the binary, you can now get it again
 ```bash
-curl -fsSL https://get.frankenphp.dev/caddy.sh | sh
+php artisan octane:frankenphp --host=0.0.0.0 --port=8080
+```
+- then stop the server directly
+
+### 5.1 Create Caddyfile
+- the frankenphp binary should be already available in the project, so we can directly create a caddyfile in the laravel project root
+```bash
+cd /var/www/laravel
+vi Caddyfile
 ```
 
-
+- ensure it has the following content
+```
+yourdomain.com {
+    root * public
+    php_frankenphp public/index.php
+    encode gzip zstd
+    file_server
+}
+```
+### 5.2 Run FrankenPHP using included binary
+```bash
+cd /var/www/laravel
+sudo ./vendor/bin/frankenphp run --config Caddyfile
+```
 
 
 
 ###### STOP
 
-
+https://github.com/dunglas/frankenphp/releases/download/v1.6.0/frankenphp-linux-x86_64
 
 ```
 #Install Frankenphp
