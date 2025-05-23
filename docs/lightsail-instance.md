@@ -154,89 +154,14 @@ php artisan key:generate
 php artisan migrate --force
 ```
 
-## 5. Setup FrankenPHP with built-in Caddy
-### 5.1 Try to start the app 
-- if you do not have the binary, you can now get it again
+### 4.5 Start Laravel with FrankenPHP
+- ensure that your setup has been successful so far; choose yes to download the binary
 ```bash
-php artisan octane:frankenphp --host=0.0.0.0 --port=8080
-```
-- then stop the server directly
-
-### 5.1 Create Caddyfile
-- the frankenphp binary should be already available in the project, so we can directly create a caddyfile in the laravel project root
-```bash
-cd /var/www/laravel
-vi Caddyfile
-```
-
-- ensure it has the following content
-```
-yourdomain.com {
-    root * public
-    php_frankenphp public/index.php
-    encode gzip zstd
-    file_server
-}
-```
-### 5.2 Run FrankenPHP using included binary
-```bash
-cd /var/www/laravel
-sudo ./vendor/bin/frankenphp run --config Caddyfile
-```
-
-
-
-###### STOP
-
-https://github.com/dunglas/frankenphp/releases/download/v1.6.0/frankenphp-linux-x86_64
-
-```
-#Install Frankenphp
-curl -fsSL https://github.com/dunglas/frankenphp/releases/latest/download/frankenphp-linux-x86_64 -o frankenphp
-chmod +x frankenphp
-sudo mv frankenphp /usr/local/bin/frankenphp
-```
-
-
-
-
-
-
-
-
-## 4. Start Laravel with FrankenPHP
-- ensure that your setup has been successful so far
-```bash
-php artisan octane:install --server=frankenphp
 php artisan octane:frankenphp --host=0.0.0.0 --port=80
 ```
 - stop the process, when you tested the project and everything runs so far :) 
 
-## 5. Setup Domain & SSL / HTTPS
-- We will be using Caddy for HTTPS
-- Why?
-    - No complex setup needed
-    - works seemlessly with frankenphp
-    - zero-config https via Let's Encrypt
-
-### 5.1 Install Caddy
-```bash
-# Install required packages for managing HTTPS repositories and verifying keys
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
-
-# Add Caddy’s official GPG key to your system to verify package authenticity
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-
-# Add the Caddy package repository to your sources list (for automatic updates)
-echo "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/debian all main" | \
-  sudo tee /etc/apt/sources.list.d/caddy-stable.list
-
-# Install Caddy
-sudo apt update
-sudo apt install caddy -y
-```
-
-### 5.2 Update DNS Settings with Domain
+## 5. Setup Domain / DNS Setting
 - lightsail console
     - go to your networking tab in lightsail console
     - copy your static ip
@@ -252,30 +177,94 @@ sudo apt install caddy -y
     - Wait for DNS propagation (minutes to hours wait time)
     - `ping yourdomain.com` to test im reachable
 
-### 5.3 Configure Caddy
-- edit caddyfile
+
+## 5. Set up FrnakenPHP on the instance
+### 5.1 Install FrankenPHP on the instance
 ```bash
-sudo vi /etc/caddy/Caddyfile
+# Get it
+curl -LO https://github.com/dunglas/frankenphp/releases/download/v1.6.0/frankenphp-linux-x86_64
+sudo mv frankenphp-linux-amd64 /usr/local/bin/frankenphp
+sudo chmod +x /usr/local/bin/frankenphp
+
+# Check it is there
+frankenphp --version
+
+# Give it permission to bind to ports below 1024
+sudo setcap 'cap_net_bind_service=+ep' /usr/local/bin/frankenphp
 ```
-- replace contents with:
+
+### 5.2 Create Caddyfile
+- create a caddyfile in the laravel project
 ```
 yourdomain.com {
-    reverse_proxy 127.0.0.1:80
+    root * /var/www/laravel/public
+    php {
+        worker /var/www/laravel/public/index.php
+    }
+    encode gzip
+    file_server
 }
 ```
-- restart caddy
+
+## 6. Run the Application via Supervisor
+- caddy will listen on port 443 and reverse proxy to frankenPHP running on port 9000
 ```bash
-sudo systemctl reload caddy
+sudo vi /etc/supervisor/conf.d/frankenphp.conf
 ```
-- or start if not running
+
+- paste:
+```
+[program:frankenphp]
+directory=/var/www/stayfinder
+command=/usr/local/bin/frankenphp run --config /var/www/laravel/Caddyfile
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/frankenphp.err.log
+stdout_logfile=/var/log/frankenphp.out.log
+user=root
+```
+
+- then reload supervisor and start the process
 ```bash
-sudo systemctl enable --now caddy
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start frankenphp
 ```
-### 5.4 Test it on your domain
-- and don'T forget to run your application again ;)
+- check status
 ```bash
-php artisan octane:frankenphp --host=0.0.0.0 --port=80
+sudo supervisorctl status frankenphp
+
 ```
+
+### 6.1 Check Firewall Setup
+- In Lightsail console > Networking > Firewall, open ports 80 and 443 (TCP)
+
+### 6.2 Verify HTTPS Access
+```
+curl -vk https://yourdomain.com
+```
+
+### 6.3 Troubleshooting Tips
+- If you see HTTP 500 errors or blank page:
+    - Check Laravel logs: `sudo tail -n 30 /var/www/stayfinder/storage/logs/laravel.log`
+    - Check FrankenPHP logs: `sudo tail -n 30 /var/log/frankenphp.err.log` and `sudo tail -n 30 /var/log/frankenphp.out.log`
+    - Check permissions on `storage` and `bootstrap/cache` folders
+    - Temporarily set `APP_DEBUG=true` in `.env` to see error details in browser
+
+
+
+
+
+
+## 5. Setup Domain & SSL / HTTPS
+- We will be using Caddy for HTTPS
+- Why?
+    - No complex setup needed
+    - works seemlessly with frankenphp
+    - zero-config https via Let's Encrypt
+
+
+
 
 
 
